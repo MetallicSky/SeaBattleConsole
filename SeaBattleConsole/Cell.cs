@@ -49,8 +49,7 @@ namespace SeaBattleConsole
 
         public void PlaceShip() // place ship on this cell
         {
-            if (!fog)
-                ship = true;
+            ship = true;
         }
 
         public int GetStatus() // get cell status

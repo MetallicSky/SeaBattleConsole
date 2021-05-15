@@ -12,6 +12,8 @@ namespace SeaBattleConsole
         private IPAddress hostIP, clientIP;
         private Cell[,] playerField = new Cell[10, 10];
         private Cell[,] enemyField = new Cell[10, 10];
+        private Cell[,] testPlayerField = new Cell[10, 10];
+        private Cell[,] testEnemyField = new Cell[10, 10];
 
         private void drawCell(Cell cell)
         {
@@ -36,7 +38,7 @@ namespace SeaBattleConsole
                     break;
 
                 case 4:
-                    Console.Write("@"); // ship bombed
+                    Console.Write("X"); // ship bombed
                     break;
             }
         }
@@ -238,6 +240,12 @@ namespace SeaBattleConsole
 
         private void plan()
         {
+            if (shipsPlaced >= 10)
+            {
+                waiting = true;
+                return;
+            }
+
             Console.Write("Enter position for ");
 
             int length = 0;
@@ -265,10 +273,7 @@ namespace SeaBattleConsole
             if (cache == -1)
                 return;
 
-            placeShip(cache / 10, cache % 10, length);
-
-            if (shipsPlaced == 10)
-                waiting = true;
+            placeShip(getRow(cache), getColumn(cache), length);
         }
 
         private void drawLogo()
@@ -283,11 +288,55 @@ namespace SeaBattleConsole
             Console.Write("\n\n");
         }
 
+        private int getRow(int rowColumn)
+        {
+            return rowColumn / 10;
+        }
+
+        private int getColumn(int rowColumn)
+        {
+            return rowColumn % 10;
+        }
+
+        private void makeTurn()
+        {
+            Console.WriteLine("Enter coordinates to bomb (if you damage enemy ship he skips the turn): ");
+            string input = Console.ReadLine();
+
+            int cache = validCheck(input);
+            if (cache == -1)
+                return;
+
+            if (!bomb(cache)) // miss
+                turn = false;
+        }
+
+        private int DEBUG_randomCell()
+        {
+            Random rnd = new Random();
+            int row = rnd.Next(10);
+            int column = rnd.Next(10);
+
+            return row * 10 + column;
+        }
+
+        private void waitTurn()
+        {
+            Console.WriteLine("BOMBS!!! Brace!");
+
+            System.Threading.Thread.Sleep(2000);
+
+            if (!getBombed(DEBUG_randomCell()))
+                turn = true;
+        }
+
         private void drawUI()
         {
             Console.Clear(); // refresh console, clear old frame
 
             drawLogo();
+
+            //connectionSetup();
 
             Console.WriteLine($"Player HP: {playerHP} \t\tEnemy HP: {enemyHP}\n"); // HPs information
 
@@ -317,14 +366,35 @@ namespace SeaBattleConsole
             if (planning && !waiting)
                 plan();
 
+            /*
             if (planning && waiting)
                 afterPlan();
+            */
+
+            if (playerHP == 0)
+            {
+                Console.WriteLine("You've lost... Game will be closed in 5 seconds.");
+                System.Threading.Thread.Sleep(5000);
+                // write disconnect signal and close the game
+            }
+            if (enemyHP == 0)
+            {
+                Console.WriteLine("You've won! Game will be closed in 5 seconds.");
+                System.Threading.Thread.Sleep(5000);
+                // write disconnect signal and close the game
+            }
+
+            if (turn)
+                makeTurn();
+            else
+                waitTurn();
         }
 
         private bool getBombed(int rowColumn)
         {
-            int row = rowColumn / 10;
-            int column = rowColumn % 10;
+            int row = getRow(rowColumn);
+            int column = getColumn(rowColumn);
+
             if (playerField[row, column].Bomb())
             {
                 playerHP--;
@@ -334,23 +404,83 @@ namespace SeaBattleConsole
             return false;
         }
 
+        private void bubbleReveal(int rowColumn)
+        {
+            int row = getRow(rowColumn);
+            int column = getColumn(rowColumn);
+
+            for (int i = row - 1; i < row + 2; i++) // this loop will proc 4, 6 or 9 times, depends on border proximity
+            {
+                if (i <= -1 || i >= 10) // out of border
+                    continue;
+
+                for (int j = column - 1; j < column + 2; j++)
+                {
+                    if (j <= -1 || j >= 10) // out of border
+                        continue;
+
+                    enemyField[i, j].Reveal();
+                }
+            }
+        }
+
+        private void destructionReveal(int rowColumn)
+        {
+            bubbleReveal(rowColumn);
+
+            int row = getRow(rowColumn);
+            int column = getColumn(rowColumn);
+
+            int rowUp = row - 1;
+            int rowDown = row + 1;
+            int columnLeft = column - 1;
+            int columnRight = column + 1;
+            for (; rowUp > -1; rowUp--) // looking up for more parts of this ship
+            {
+                if (!enemyField[rowUp, column].GetShip()) // check if there is even a ship
+                    break;
+                bubbleReveal(rowUp * 10 + column);
+            }
+
+            for (; rowDown < 10; rowDown++) // looking down for more parts of this ship
+            {
+                if (!enemyField[rowDown, column].GetShip()) // check if there is even a ship
+                    break;
+                bubbleReveal(rowDown * 10 + column);
+            }
+
+            for (; columnLeft > -1; columnLeft--) // looking left for more parts of this ship
+            {
+                if (!enemyField[row, columnLeft].GetShip()) // check if there is even a ship
+                    break;
+                bubbleReveal(row * 10 + columnLeft);
+            }
+
+            for (; columnRight < 10; columnRight++) // looking right for more parts of this ship
+            {
+                if (!enemyField[row, columnRight].GetShip()) // check if there is even a ship
+                    break;
+                bubbleReveal(row * 10 + columnRight);
+            }
+        }
+
         private bool bomb(int rowColumn)
         {
-            int row = rowColumn / 10;
-            int column = rowColumn % 10;
+            int row = getRow(rowColumn);
+            int column = getColumn(rowColumn);
 
             if (enemyField[row, column].GetBombed()) // you can't bomb the same spot 2 times
                 return false;
 
             if (enemyField[row, column].Bomb())
             {
-                int rowUp = row--;
-                int rowDown = row++;
-                int columnLeft = column--;
-                int columnRight = column++;
+                int rowUp = row - 1;
+                int rowDown = row + 1;
+                int columnLeft = column - 1;
+                int columnRight = column + 1;
                 bool destroyedShip = true;
                 if (destroyedShip)
-                    for (rowUp = rowUp; rowUp > -1; rowUp--) // looking up for more undamaged parts of the same ship
+                    for (; rowUp > -1; rowUp--) // looking up for more undamaged parts of the same ship
                     {
                         if (!enemyField[rowUp, column].GetShip()) // check if there is even a ship
                             break;
@@ -362,7 +492,7 @@ namespace SeaBattleConsole
                     }
 
                 if (destroyedShip)
-                    for (rowDown = rowDown; rowDown < 10; rowDown++) // looking down for more undamaged parts of the same ship
+                    for (; rowDown < 10; rowDown++) // looking down for more undamaged parts of the same ship
                     {
                         if (!enemyField[rowDown, column].GetShip()) // check if there is even a ship
                             break;
@@ -374,7 +504,7 @@ namespace SeaBattleConsole
                     }
 
                 if (destroyedShip)
-                    for (columnLeft = columnLeft; columnLeft > -1; columnLeft--) // looking left for more undamaged parts of the same ship
+                    for (; columnLeft > -1; columnLeft--) // looking left for more undamaged parts of the same ship
                     {
                         if (!enemyField[row, columnLeft].GetShip()) // check if there is even a ship
                             break;
@@ -386,7 +516,7 @@ namespace SeaBattleConsole
                     }
 
                 if (destroyedShip)
-                    for (columnRight = columnRight; columnRight > -1; columnRight++) // looking right for more undamaged parts of the same ship
+                    for (; columnRight < 10; columnRight++) // looking right for more undamaged parts of the same ship
                     {
                         if (!enemyField[row, columnRight].GetShip()) // check if there is even a ship
                             break;
@@ -408,76 +538,101 @@ namespace SeaBattleConsole
             return false;
         }
 
-        private void bubbleReveal(int rowColumn)
-        {
-            int row = rowColumn / 10;
-            int column = rowColumn % 10;
-
-            for (int i = row - 1; i < row + 2; i++) // this loop will proc 4, 6 or 9 times, depends on border proximity
-            {
-                if (i <= -1 || i >= 10) // out of border
-                    continue;
-
-                for (int j = column - 1; j < column + 2; j++)
-                {
-                    if (j <= -1 || j >= 10) // out of border
-                        continue;
-
-                    enemyField[i, j].Reveal();
-                }
-            }
-        }
-
-        private void destructionReveal(int rowColumn)
-        {
-            int row = rowColumn / 10;
-            int column = rowColumn % 10;
-
-            int rowUp = row--;
-            int rowDown = row++;
-            int columnLeft = column--;
-            int columnRight = column++;
-            for (rowUp = rowUp; rowUp > -1; rowUp--) // looking up for more parts of this ship
-            {
-                if (!enemyField[rowUp, column].GetShip()) // check if there is even a ship
-                    break;
-                bubbleReveal(rowColumn);
-            }
-
-            for (rowDown = rowDown; rowDown < 10; rowDown++) // looking down for more parts of this ship
-            {
-                if (!enemyField[rowDown, column].GetShip()) // check if there is even a ship
-                    break;
-                bubbleReveal(rowColumn);
-            }
-
-            for (columnLeft = columnLeft; columnLeft > -1; columnLeft--) // looking left for more parts of this ship
-            {
-                if (!enemyField[row, columnLeft].GetShip()) // check if there is even a ship
-                    break;
-                bubbleReveal(rowColumn);
-            }
-
-            for (columnRight = columnRight; columnRight > -1; columnRight++) // looking right for more parts of this ship
-            {
-                if (!enemyField[row, columnRight].GetShip()) // check if there is even a ship
-                    break;
-                bubbleReveal(rowColumn);
-            }
-        }
-
         public Board()
         {
+            // TEST
+
+            // /*
+
+            for (int i = 0; i < 10; i++)
+            {
+                for (int j = 0; j < 10; j++)
+                {
+                    testPlayerField[i, j] = new Cell(false);
+                    testEnemyField[i, j] = new Cell(true);
+                }
+            }
+
+            testPlayerField[0, 0].PlaceShip();
+            testPlayerField[0, 1].PlaceShip();
+
+            testPlayerField[0, 3].PlaceShip();
+            testPlayerField[1, 3].PlaceShip();
+            testPlayerField[2, 3].PlaceShip();
+
+            testPlayerField[0, 6].PlaceShip();
+            testPlayerField[0, 7].PlaceShip();
+            testPlayerField[0, 8].PlaceShip();
+            testPlayerField[0, 9].PlaceShip();
+
+            testPlayerField[2, 9].PlaceShip();
+            testPlayerField[3, 9].PlaceShip();
+
+            testPlayerField[4, 1].PlaceShip();
+            testPlayerField[5, 1].PlaceShip();
+            testPlayerField[6, 1].PlaceShip();
+
+            testPlayerField[5, 6].PlaceShip();
+
+            testPlayerField[8, 3].PlaceShip();
+
+            testPlayerField[8, 5].PlaceShip();
+
+            testPlayerField[8, 8].PlaceShip();
+            testPlayerField[9, 8].PlaceShip();
+
+            testPlayerField[9, 0].PlaceShip();
+
+            testEnemyField[0, 0].PlaceShip();
+            testEnemyField[0, 1].PlaceShip();
+
+            testEnemyField[0, 3].PlaceShip();
+            testEnemyField[1, 3].PlaceShip();
+            testEnemyField[2, 3].PlaceShip();
+
+            testEnemyField[0, 6].PlaceShip();
+            testEnemyField[0, 7].PlaceShip();
+            testEnemyField[0, 8].PlaceShip();
+            testEnemyField[0, 9].PlaceShip();
+
+            testEnemyField[2, 9].PlaceShip();
+            testEnemyField[3, 9].PlaceShip();
+
+            testEnemyField[4, 1].PlaceShip();
+            testEnemyField[5, 1].PlaceShip();
+            testEnemyField[6, 1].PlaceShip();
+
+            testEnemyField[5, 6].PlaceShip();
+
+            testEnemyField[8, 3].PlaceShip();
+
+            testEnemyField[8, 5].PlaceShip();
+
+            testEnemyField[8, 8].PlaceShip();
+            testEnemyField[9, 8].PlaceShip();
+
+            testEnemyField[9, 0].PlaceShip();
+
+            // */
+
             for (int i = 0; i < 10; i++)
             {
                 for (int j = 0; j < 10; j++)
                 {
                     playerField[i, j] = new Cell(false);
                     enemyField[i, j] = new Cell(true);
+
+                    // TEST
+
+                    playerField[i, j] = testPlayerField[i, j];
+                    enemyField[i, j] = testEnemyField[i, j];
                 }
             }
 
             shipsPlaced = 0;
+
+            shipsPlaced = 10; // TEST
+
             playerHP = 20;
             enemyHP = playerHP;
 
@@ -487,6 +642,7 @@ namespace SeaBattleConsole
             lobby = true;
             planning = true;
             getHostIP = true;
+            turn = true;
         }
 
         public void start()

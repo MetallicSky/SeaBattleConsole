@@ -307,8 +307,11 @@ namespace SeaBattleConsole
             if (cache == -1)
                 return;
 
-            if (!bomb(cache)) // miss
-                turn = false;
+            // send cache to enemy for his getBombed
+
+            // write something to change bool turn
+
+            // if received signal shipDestroyed, call destructionReveal(cache)
         }
 
         private int DEBUG_randomCell()
@@ -390,17 +393,92 @@ namespace SeaBattleConsole
                 waitTurn();
         }
 
+        private bool shipDestroyed(int rowColumn)
+        {
+            int row = getRow(rowColumn);
+            int column = getColumn(rowColumn);
+
+            int rowUp = row - 1;
+            int rowDown = row + 1;
+            int columnLeft = column - 1;
+            int columnRight = column + 1;
+            bool destroyedShip = true;
+            if (destroyedShip)
+                for (; rowUp > -1; rowUp--) // looking up for more undamaged parts of the same ship
+                {
+                    if (!playerField[rowUp, column].GetShip()) // check if there is even a ship
+                        break;
+                    if (playerField[rowUp, column].GetShip() && !playerField[rowUp, column].GetBombed())
+                    {
+                        destroyedShip = false;
+                        break;
+                    }
+                }
+
+            if (destroyedShip)
+                for (; rowDown < 10; rowDown++) // looking down for more undamaged parts of the same ship
+                {
+                    if (!playerField[rowDown, column].GetShip()) // check if there is even a ship
+                        break;
+                    if (playerField[rowDown, column].GetShip() && !playerField[rowDown, column].GetBombed())
+                    {
+                        destroyedShip = false;
+                        break;
+                    }
+                }
+
+            if (destroyedShip)
+                for (; columnLeft > -1; columnLeft--) // looking left for more undamaged parts of the same ship
+                {
+                    if (!playerField[row, columnLeft].GetShip()) // check if there is even a ship
+                        break;
+                    if (playerField[row, columnLeft].GetShip() && !playerField[row, columnLeft].GetBombed())
+                    {
+                        destroyedShip = false;
+                        break;
+                    }
+                }
+
+            if (destroyedShip)
+                for (; columnRight < 10; columnRight++) // looking right for more undamaged parts of the same ship
+                {
+                    if (!playerField[row, columnRight].GetShip()) // check if there is even a ship
+                        break;
+                    if (playerField[row, columnRight].GetShip() && !playerField[row, columnRight].GetBombed())
+                    {
+                        destroyedShip = false;
+                        break;
+                    }
+                }
+
+            if (destroyedShip)
+                return true;
+
+            return false;
+        }
+
         private bool getBombed(int rowColumn)
         {
             int row = getRow(rowColumn);
             int column = getColumn(rowColumn);
 
+            if (enemyField[row, column].GetBombed()) // you can't bomb the ship part 2 times
+                return false;
+
             if (playerField[row, column].Bomb())
             {
                 playerHP--;
+
+                if (shipDestroyed(rowColumn))
+                {
+                    // send shipDestoyed signal
+                }
+
+                turn = false;
                 return true;
             }
 
+            turn = true;
             return false;
         }
 

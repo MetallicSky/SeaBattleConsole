@@ -18,6 +18,7 @@ namespace SeaBattleConsole
 
         public Board()
         {
+            Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
             for (int i = 0; i < 10; i++)
             {
                 for (int j = 0; j < 10; j++)
@@ -27,9 +28,9 @@ namespace SeaBattleConsole
                 }
             }
             client = new TcpClient();
-            shipsPlaced = 0;
+            shipsPlaced = 9; // 0
 
-            playerHP = 20;
+            playerHP = 1; // 20
             enemyHP = playerHP;
 
             placement = false;
@@ -146,7 +147,7 @@ namespace SeaBattleConsole
             Console.Write("All ships dispatched, waiting for enemy...");
             NetworkStream stream = client.GetStream();
             Byte[] b = new Byte[20];
-            Byte[] bSend = System.Text.Encoding.Unicode.GetBytes("done");
+            Byte[] bSend = System.Text.Encoding.GetEncoding(866).GetBytes("2588");
             stream.Write(bSend);
             int i = 0;
             while ((i = stream.Read(b, 0, b.Length)) != 0)
@@ -213,8 +214,14 @@ namespace SeaBattleConsole
             if (afplaning)
                 afterPlan();
 
+            if (turn)
+                makeTurn();
+            else
+                waitTurn();
+
             if (playerHP == 0)
             {
+                Console.Clear();
                 PlaySound("lose.wav");
                 Console.WriteLine(@"
 
@@ -249,11 +256,14 @@ namespace SeaBattleConsole
 
 You've lost... Game will be closed in 5 seconds.");
                 System.Threading.Thread.Sleep(5000);
+                Console.Clear();
                 client.Close();
+                Environment.Exit(0); // заглушка
                 return;
             }
             if (enemyHP == 0)
             {
+                Console.Clear();
                 PlaySound("win.wav");
                 Console.WriteLine(@"
 
@@ -279,14 +289,11 @@ _____________\________\___\____|_/______/_________|\/\___||______
 
 You've won! Game will be closed in 5 seconds.");
                 System.Threading.Thread.Sleep(5000);
+                Console.Clear();
                 client.Close();
+                Environment.Exit(0); // заглушка
                 return;
             }
-
-            if (turn)
-                makeTurn();
-            else
-                waitTurn();
         }
 
         public void drawLogo()
@@ -298,6 +305,7 @@ You've won! Game will be closed in 5 seconds.");
   \___ \|  __|   / /\ \   |  _ < / /\ \ | |     | |  | |    |  __|
   ____) | |____ / ____ \  | |_) / ____ \| |     | |  | |____| |____
  |_____/|______/_/    \_\ |____/_/    \_\_|     |_|  |______|______|";
+
             Console.Write(text);
             Console.Write("\n\n");
         }
@@ -305,11 +313,18 @@ You've won! Game will be closed in 5 seconds.");
         private void drawCell(Cell cell)
         {
             int status = cell.GetStatus();
+            var recievedBytes = new byte[256];
+
+            for (int i = 0; i < recievedBytes.Length; i++)
+            {
+                recievedBytes[i] = (byte)i;
+            }
+            var str = Encoding.GetEncoding(866).GetString(recievedBytes);
 
             switch (status)
             {
                 case 0:
-                    Console.Write("#"); // fog
+                    Console.Write("."); // fog
                     break;
 
                 case 1:
@@ -388,89 +403,6 @@ You've won! Game will be closed in 5 seconds.");
                 stream.Write(bSend);
                 break;
             }
-        }
-
-        private int DEBUG_randomCell()
-        {
-            Random rnd = new Random();
-            int row = rnd.Next(10);
-            int column = rnd.Next(10);
-
-            return row * 10 + column;
-        }
-
-        private bool bomb(int rowColumn)
-        {
-            int row = getRow(rowColumn);
-            int column = getColumn(rowColumn);
-
-            if (enemyField[row, column].GetBombed()) // you can't bomb the same spot 2 times
-                return false;
-
-            if (enemyField[row, column].Bomb())
-            {
-                int rowUp = row - 1;
-                int rowDown = row + 1;
-                int columnLeft = column - 1;
-                int columnRight = column + 1;
-                bool destroyedShip = true;
-                if (destroyedShip)
-                    for (; rowUp > -1; rowUp--) // looking up for more undamaged parts of the same ship
-                    {
-                        if (!enemyField[rowUp, column].GetShip()) // check if there is even a ship
-                            break;
-                        if (enemyField[rowUp, column].GetShip() && !enemyField[rowUp, column].GetBombed())
-                        {
-                            destroyedShip = false;
-                            break;
-                        }
-                    }
-
-                if (destroyedShip)
-                    for (; rowDown < 10; rowDown++) // looking down for more undamaged parts of the same ship
-                    {
-                        if (!enemyField[rowDown, column].GetShip()) // check if there is even a ship
-                            break;
-                        if (enemyField[rowDown, column].GetShip() && !enemyField[rowDown, column].GetBombed())
-                        {
-                            destroyedShip = false;
-                            break;
-                        }
-                    }
-
-                if (destroyedShip)
-                    for (; columnLeft > -1; columnLeft--) // looking left for more undamaged parts of the same ship
-                    {
-                        if (!enemyField[row, columnLeft].GetShip()) // check if there is even a ship
-                            break;
-                        if (enemyField[row, columnLeft].GetShip() && !enemyField[row, columnLeft].GetBombed())
-                        {
-                            destroyedShip = false;
-                            break;
-                        }
-                    }
-
-                if (destroyedShip)
-                    for (; columnRight < 10; columnRight++) // looking right for more undamaged parts of the same ship
-                    {
-                        if (!enemyField[row, columnRight].GetShip()) // check if there is even a ship
-                            break;
-                        if (enemyField[row, columnRight].GetShip() && !enemyField[row, columnRight].GetBombed())
-                        {
-                            destroyedShip = false;
-                            break;
-                        }
-                    }
-
-                if (destroyedShip)
-                    destructionReveal(rowColumn);
-
-                enemyHP--;
-
-                return true;
-            }
-
-            return false;
         }
 
         private int validCheck(string input)

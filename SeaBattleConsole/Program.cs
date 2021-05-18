@@ -1,36 +1,86 @@
 ﻿using System;
-using System.Net.Sockets;
-using System.Threading.Tasks;
+using System.Diagnostics;
+using System.IO;
+using System.Text;
 
 namespace SeaBattleConsole
 {
     internal class Program
     {
-        private static TcpClient client;
+        public static void PlaySound(string file)
+        {
+            string path = Path.Combine(Environment.CurrentDirectory, @"sounds\");
+
+            string pathSTR = path + file;
+
+            Process.Start(@"powershell", $@"-c (New-Object Media.SoundPlayer '{pathSTR}').PlaySync();");
+        }
+
+        public static void stopSound()
+        {
+            //Process.Start("cmd.exe", "/c taskkill /F /IM powershell.exe");
+
+            Process[] proc = Process.GetProcesses();
+            foreach (Process process in proc)
+                if (process.ProcessName == "powershell")
+                {
+                    process.Kill();
+                }
+        }
 
         private static void Main(string[] args)
         {
-            client = new TcpClient();
-            client.Connect("93.191.58.52", 420);
-
-            Task.Factory.StartNew(() =>
+            bool exit = false;
+            PlaySound("menuMusic.wav");
+            while (exit == false)
             {
-                NetworkStream serverCennel = client.GetStream();
-                int i = 0;
-                Byte[] b = new Byte[255];
-                while ((i = serverCennel.Read(b, 0, b.Length)) != 0)
+                Board game = new Board();
+                game.drawLogo();
+                Console.WriteLine(@"
+                    ()
+                    ||q',,'
+                    ||d,~
+         (,---------------------,)
+          ',       q888p       ,'
+            \       986       /
+             \  8p, d8b ,q8  /
+              ) 888a888a888 (
+             /  8b` q8p `d8  \              O
+            /       689       \             |','
+           /       d888b       \      (,---------,)
+         ,'_____________________',     \   ,8,   /
+         (`__________L|_________`)      ) a888a (    _,_
+         [___________|___________]     /___`8`___\   }*{
+           }:::|:::::}::|::::::{      (,=========,)  -=-
+            '|::::}::|:::::{:|'  .,.    \:::|:::/    ~`~=
+             '|}:::::|::{:::|'          ~'.,.'~`~
+               '|:}::|::::|'~`~'.,.'
+           ~`~'.,.'~`~'.,                 '~`~'.,.'~
+                          '.,.'~`~
+
+                          ");
+                Console.WriteLine("1 - Start\n0 - Exit\n");
+
+                string input = Console.ReadLine();
+                switch (input)
                 {
-                    Console.WriteLine(System.Text.Encoding.Unicode.GetString(b, 0, i));
-                }
-            });
+                    case "0":
+                        exit = true;
+                        stopSound();
+                        Console.Clear();
+                        break;
 
-            NetworkStream stream = client.GetStream();
-            while (true)
-            {
-                Byte[] data = System.Text.Encoding.Unicode.GetBytes(Console.ReadLine());
-                stream.Write(data);
+                    case "1":
+                        PlaySound("place.wav");
+                        Console.Clear();
+                        game.start();
+                        break;
+
+                    default:
+                        Console.Clear();
+                        break;
+                }
             }
-            // Board game = new Board();
             // game.start();
         }
     }
